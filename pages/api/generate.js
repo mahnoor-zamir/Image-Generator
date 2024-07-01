@@ -1,15 +1,17 @@
-import {Configuration, OpenAIApi} from "openai"
+import OpenAIApi from "openai"
 
-const configuration = new Configuration({
+// const configuration = new Configuration({
+// 	apiKey: process.env.OPENAI_API_KEY
+// })
+
+const openai = new OpenAIApi({
 	apiKey: process.env.OPENAI_API_KEY
 })
-
-const openai = new OpenAIApi(configuration)
 
 export default async function handler(req, res) {
 	const {prompt, size} = req.body
 
-	if (!configuration.apiKey) {
+	if (!openai.apiKey) {
 		return res.status(500).json({
 			error: {
 				message: "api key missing!"
@@ -26,7 +28,7 @@ export default async function handler(req, res) {
 	}
 
 	try {
-		let response = await openai.createImage({
+		let response = await openai.images.generate({
 			prompt,
 			n: 5,
 			size,
