@@ -1,48 +1,65 @@
-import OpenAIApi from "openai"
-
-// const configuration = new Configuration({
-// 	apiKey: process.env.OPENAI_API_KEY
-// })
-
-const openai = new OpenAIApi({
-	apiKey: process.env.OPENAI_API_KEY
-})
+import fs from 'fs';
+import fetch from 'node-fetch';
 
 export default async function handler(req, res) {
-	const {prompt, size} = req.body
+  // Stability.ai API endpoint and headers
+  const path = "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image";
+  const apiKey = "sk-07WuAH6MxY18zTOaLpG6jgDAMjseAiw5JeqiUh38xkWgm2io"; // Replace with your actual API key
+  const headers = {
+    Accept: "application/json",
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
 
-	if (!openai.apiKey) {
-		return res.status(500).json({
-			error: {
-				message: "api key missing!"
-			}
-		})
-	}
+  // Request body for text-to-image generation
+  const body = {
+    steps: 40,
+    width: 1024,
+    height: 1024,
+    seed: 0,
+    cfg_scale: 5,
+    samples: 1,
+    text_prompts: [
+      {
+        text: req.body.prompt, // Use the prompt sent from frontend
+        weight: 1
+      },
+      {
+        text: "blurry, bad",
+        weight: -1
+      }
+    ],
+  };
 
-	if(prompt.trim().length === 0 || size.trim().length === 0) {
-		return res.status(400).json({
-			error: {
-				message: "prompt or image size missing"
-			}
-		})
-	}
+  try {
+    // Make the API request
+    const response = await fetch(path, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
 
-	try {
-		let response = await openai.images.generate({
-			prompt,
-			n: 5,
-			size,
-			user: "test 123"
-		})
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
 
-		return res.send({data: response.data.data})
+    // Process API response
+    const responseJSON = await response.json();
 
-	} catch (error) {
-		console.log(error)
-		return res.status(400).json({
-			error: {
-				message: error.message
-			}
-		})
-	}
+    // Save image artifacts to files
+    const imageUrls = responseJSON.artifacts.map((image, index) => {
+      const fileName = `txt2img_${image.seed}.png`;
+      const filePath = `./public/${fileName}`; // Adjust the path where images should be saved
+      fs.writeFileSync(filePath, Buffer.from(image.base64, 'base64'));
+      console.log(`Image ${index + 1} saved at ${filePath}`);
+      return `/${fileName}`; // Return the path to the saved image
+    });
+
+    console.log("Text-to-image generation completed successfully.");
+    return res.status(200).json({ images: imageUrls });
+
+  } catch (error) {
+    console.error("Error:", error);
+    return res.status(500).json({ error: error.message });
+  }
 }
